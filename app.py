@@ -25,7 +25,7 @@ def obtain_access_token(username, password, otp=None):
             "password": password,
             "skip_provision": True,
             "otp_claim": None,
-            "scope": "invest.read invest.write trade.read trade.write tax.read tax.write",
+            "scope": "invest.read",
             "client_id": "4da53ac2b03225bed1550eba8e4611e086c7b905a3855e6ed12ea08c246758fa",
         },
         headers={
