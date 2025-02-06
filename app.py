@@ -25,7 +25,7 @@ def obtain_access_token(username, password, otp=None):
             "password": password,
             "skip_provision": True,
             "otp_claim": None,
-            "scope": "invest.read",
+            "scope": "invest.read invest.write trade.read trade.write tax.read tax.write",
             "client_id": "4da53ac2b03225bed1550eba8e4611e086c7b905a3855e6ed12ea08c246758fa",
         },
         headers={
@@ -75,28 +75,40 @@ def get_summary(access_token, user_identity):
     with open("get-accounts.graphql", "r") as f:
         query = gql(f.read())
 
-    accounts_info = client.execute(query, variable_values={"identityId": user_identity})
+    accounts_info = client.execute(query, variable_values={
+        "identityId": user_identity,
+        "pageSize": 150,
+    })
+
+    logger.debug("page_info" + json.dumps(accounts_info["identity"]["accounts"]["pageInfo"], indent=2))
 
     totals = {}
     for node in accounts_info["identity"]["accounts"]["edges"]:
         account_info = node["node"]
         if account_info["status"] == "closed":
+            logger.info(f"Skipping closed account {account_info['id']}")
             continue
         if account_info["currency"] != "CAD":
+            logger.info(f"Skipping non-CAD account {account_info['id']}")
             continue
+        logger.info("financials: " + json.dumps(account_info["financials"], indent=2))
         value = (
-            account_info["financials"]["currentCombined"]
+            (account_info["financials"]
+            .get("currentCombined", {}) or {})
             .get("netLiquidationValueV2", {})
             .get("cents", None)
         )
         if not value:
+            logger.info(f"Skipping account {account_info['id']} with no value")
             continue
+
+        logger.debug("value: " + json.dumps(value, indent=2))
 
         account_id = account_info["id"]
         account_type = get_account_type(account_id, account_info["accountOwners"])
         totals[account_type] = totals.get(account_type, 0) + (value / 100)
 
-        print(
+        logger.info(
             f"{account_id}, {account_type}, {account_info['nickname']}, {value / 100 if value else None}"
         )
     return totals
