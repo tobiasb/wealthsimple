@@ -86,12 +86,12 @@ def get_summary(access_token, user_identity):
     for node in accounts_info["identity"]["accounts"]["edges"]:
         account_info = node["node"]
         if account_info["status"] == "closed":
-            logger.info(f"Skipping closed account {account_info['id']}")
+            logger.debug(f"Skipping closed account {account_info['id']}")
             continue
         if account_info["currency"] != "CAD":
-            logger.info(f"Skipping non-CAD account {account_info['id']}")
+            logger.debug(f"Skipping non-CAD account {account_info['id']}")
             continue
-        logger.info("financials: " + json.dumps(account_info["financials"], indent=2))
+        logger.debug("financials: " + json.dumps(account_info["financials"], indent=2))
         value = (
             (account_info["financials"]
             .get("currentCombined", {}) or {})
@@ -99,7 +99,7 @@ def get_summary(access_token, user_identity):
             .get("cents", None)
         )
         if not value:
-            logger.info(f"Skipping account {account_info['id']} with no value")
+            logger.debug(f"Skipping account {account_info['id']} with no value")
             continue
 
         logger.debug("value: " + json.dumps(value, indent=2))
@@ -108,7 +108,7 @@ def get_summary(access_token, user_identity):
         account_type = get_account_type(account_id, account_info["accountOwners"])
         totals[account_type] = totals.get(account_type, 0) + (value / 100)
 
-        logger.info(
+        logger.debug(
             f"{account_id}, {account_type}, {account_info['nickname']}, {value / 100 if value else None}"
         )
     return totals
@@ -205,17 +205,11 @@ def get_transactions(access_token, user_identity, type, start, end):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--username", type=str)
-    parser.add_argument("--summary", action="store_true")
-    parser.add_argument("--transactions", action="store_true")
     parser.add_argument(
         f"--start", type=str, default=(datetime.now() - timedelta(days=30)).isoformat()
     )
     parser.add_argument(f"--end", type=str, default=datetime.now().isoformat())
     args = parser.parse_args()
-
-    if not args.summary and not args.transactions:
-        print("Please provide a command")
-        return
 
     access_token = obtain_access_token(
         args.username, getpass("Enter password: "), input("Enter OTP: ")
@@ -224,24 +218,25 @@ def main():
     user_identity, user_email = get_identity(access_token)
     print(f"User: {user_email}, Identity: {user_identity}")
 
-    if args.summary:
-        totals = get_summary(access_token, user_identity)
-        print(json.dumps(totals, indent=2))
-    if args.transactions:
-        for account_type in ["rrsp", "tfsa"]:
-            print(
-                f"Transactions for {account_type.upper()} from {args.start} to {args.end}"
-            )
-            transactions, total = get_transactions(
-                access_token,
-                user_identity,
-                account_type.lower(),
-                datetime.fromisoformat(args.start),
-                datetime.fromisoformat(args.end),
-            )
-            for line in transactions:
-                print(line)
-            print(f"Total: {total}")
+    totals = get_summary(access_token, user_identity)
+    print(f"Summary:")
+    for key in totals:
+        print(f"{key}: {totals[key]}")
+
+    for account_type in ["rrsp", "tfsa"]:
+        print(
+            f"Transactions for {account_type.upper()} from {args.start} to {args.end}"
+        )
+        transactions, total = get_transactions(
+            access_token,
+            user_identity,
+            account_type.lower(),
+            datetime.fromisoformat(args.start),
+            datetime.fromisoformat(args.end),
+        )
+        for line in transactions:
+            print(line)
+        print(f"Total: {total}")
 
 
 if __name__ == "__main__":
